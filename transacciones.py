@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 def procesar_transacciones(ruta_transacciones,df_inventario,df_feedback):
 
