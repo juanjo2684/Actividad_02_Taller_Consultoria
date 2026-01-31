@@ -22,7 +22,7 @@ def procesar_inventario(inventario_path: str) -> pd.DataFrame:
     
     inventario = pd.read_csv(inventario_path)
 
-    inventario_str = inventario.select_dtypes('str')
+    inventario_str = inventario.select_dtypes(include=['object'])
     inventario_str = inventario_str.apply(lambda x: x.str.lower().str.strip())
     inventario_str.loc[:,'Lead_Time_Dias'] = inventario_str.loc[:,'Lead_Time_Dias'].str.replace(' días','', regex=False)
     inventario_str.loc[:,'Lead_Time_Dias'] = inventario_str.loc[:,'Lead_Time_Dias'].str.replace('inmediato','1', regex=False)
