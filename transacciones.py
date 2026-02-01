@@ -130,8 +130,10 @@ def procesar_transacciones(ruta_transacciones, df_inventario, df_feedback):
     # ==========================================
     # Llenar nulos con la mediana del grupo bodega-ciudad
     # Esto mantiene consistencia de tiempos por ruta
+
+    df_transacciones.loc[df_transacciones['Tiempo_Entrega_Real'] == 999, 'Tiempo_Entrega_Real'] = np.nan
     df_transacciones['Tiempo_Entrega_Real'] = df_transacciones['Tiempo_Entrega_Real'].fillna(
-        df_transacciones.groupby('id_tiempos_entrega')['Tiempo_Entrega_Real'].transform('median')
+        df_transacciones.groupby('id_tiempos_entrega')['Tiempo_Entrega_Real'].transform('median').fillna(0)
     )
 
     # ==========================================
@@ -157,20 +159,20 @@ def procesar_transacciones(ruta_transacciones, df_inventario, df_feedback):
     fecha_max = df_transacciones.Fecha_Venta.max()
     
     df_transacciones['Fecha_Calculada'] = df_transacciones.apply(
-        lambda x: x['Fecha_Venta'] + pd.DateOffset(day=int(x['Tiempo_Entrega_Real'])), 
+        lambda x: x['Fecha_Venta'] + pd.DateOffset(days=int(x['Tiempo_Entrega_Real'])), 
         axis=1
     )
 
     # ==========================================
-    # PASO 14: IMPUTACIÓN LÓGICA FINAL - ESTADO_ENVIO
+    # PASO 14: IMPUTACIÓN LÓGICA - ESTADO_ENVIO
     # ==========================================
-    # Paso 14a: Marcar como "ent.regado" (entregado)
+    # Paso 14a: Marcar como "entregado" (entregado)
     # Si la fecha calculada es menor a la fecha máxima del dataset
     # Significa que debería haber llegado ya
     df_transacciones.loc[
         (df_transacciones['Fecha_Calculada'] < fecha_max) & (df_transacciones['Estado_Envio'].isna()),
         'Estado_Envio'
-    ] = 'ent.regado'
+    ] = 'entregado'
     
     # Paso 14b: Marcar como "en camino"
     # Si la fecha calculada es mayor a la fecha máxima
@@ -179,6 +181,35 @@ def procesar_transacciones(ruta_transacciones, df_inventario, df_feedback):
         (df_transacciones['Fecha_Calculada'] >= fecha_max) & (df_transacciones['Estado_Envio'].isna()),
         'Estado_Envio'
     ] = 'en camino'
+    
+    # ==========================================
+    # PASO 15: IMPUTACIÓN LÓGICA FINAL - CANTIDAD_VENDIDA
+    # ==========================================
+
+    # Crear un mapeo del Costo Unitario
+    mapa_costos = df_inventario.set_index('SKU_ID')['Costo_Unitario_USD']
+
+    # Traer el costo temporalmente a df_transacciones
+    df_transacciones['Costo_Temp'] = df_transacciones['SKU_ID'].map(mapa_costos)
+
+    #Crear el filtro para identificar solo las filas con el error -5
+    filtro_error = df_transacciones['Cantidad_Vendida'] == -5
+
+    # Calcular el nuevo valor (Precio / Costo) y redondear hacia arriba
+    calculo_corregido = (
+        df_transacciones.loc[filtro_error, 'Precio_Venta_Final'] / 
+        df_transacciones.loc[filtro_error, 'Costo_Temp']
+    )
+
+    # Redondeamos
+    vals_corregidos = np.ceil(calculo_corregido)
+
+    # Reemplazar los valores en el DataFrame original
+    df_transacciones.loc[filtro_error, 'Cantidad_Vendida'] = vals_corregidos
+
+    # Eliminar la columna temporal de costo
+    df_transacciones.drop(columns=['Costo_Temp'], inplace=True)
+
 
     # ==========================================
     # RESULTADO FINAL
