@@ -183,3 +183,5 @@ def procesar_transacciones(ruta_transacciones, df_inventario, df_feedback):
     # ==========================================
     # RESULTADO FINAL
     # ==========================================
+
+    return df_transacciones.reset_index(drop=True)
