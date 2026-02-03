@@ -6,13 +6,13 @@ from src.reportes import generar_reporte_ejecutivo_pdf
 
 def mostrar_resumen_ejecutivo(df_filtrado, health_scores, metricas_calidad):
     """
-    Muestra el resumen ejecutivo con KPIs clave.
+    Muestra el resumen ejecutivo con KPIs clave y diagnósticos de consultoría.
     """
     st.header("📈 Resumen Ejecutivo")
     st.markdown("---")
     
     # -----------------------------
-    # KPIs principales en 4 columnas
+    # 1. KPIs principales en 4 columnas
     # -----------------------------
     col1, col2, col3, col4 = st.columns(4)
     
@@ -28,20 +28,19 @@ def mostrar_resumen_ejecutivo(df_filtrado, health_scores, metricas_calidad):
     with col3:
         ventas_sin_inventario = df_filtrado["venta_sin_inventario"].sum()
         pct_riesgo = (ventas_sin_inventario / len(df_filtrado) * 100) if len(df_filtrado) > 0 else 0
-        st.metric("👻 Ventas Sin Inventario", ventas_sin_inventario, f"{pct_riesgo:.1f}%")
+        st.metric("👻 Ventas Sin Inventario", f"{ventas_sin_inventario:,}", f"{pct_riesgo:.1f}% Riesgo", delta_color="inverse")
     
     with col4:
         margen_negativo = (df_filtrado["margen_real"] < 0).sum()
-        st.metric("🔴 Transacciones con Perdida", margen_negativo)
+        st.metric("🔴 Transacciones con Pérdida", f"{margen_negativo:,}")
     
     st.markdown("---")
     
     # -----------------------------
-    # Health Scores
+    # 2. Health Scores (Calidad de la Data)
     # -----------------------------
     st.subheader("📊 Health Score de Datos")
     
-    # Convertir health_scores a DataFrame para visualización
     hs_data = []
     for dataset, scores in health_scores.items():
         hs_data.append({
@@ -53,41 +52,32 @@ def mostrar_resumen_ejecutivo(df_filtrado, health_scores, metricas_calidad):
     
     df_hs = pd.DataFrame(hs_data)
     
-    # Mostrar como tabla
-    st.dataframe(df_hs.style.format({
-        "Antes": "{:.1f}",
-        "Despues": "{:.1f}",
-        "Mejora": "{:+.1f}"
-    }), hide_index=True)
+    col_a, col_b = st.columns([1, 2])
     
-    # Grafico de barras - CONVERTIR A FORMATO LARGO (melted)
-    df_hs_melted = df_hs.melt(
-        id_vars=["Dataset"], 
-        value_vars=["Antes", "Despues"],
-        var_name="Estado",
-        value_name="Score"
-    )
+    with col_a:
+        st.dataframe(df_hs.style.format({
+            "Antes": "{:.1f}",
+            "Despues": "{:.1f}",
+            "Mejora": "{:+.1f}"
+        }), hide_index=True)
     
-    fig_hs = px.bar(
-        df_hs_melted,
-        x="Dataset",
-        y="Score",
-        color="Estado",
-        barmode="group",
-        title="Health Score: Antes vs Despues de la Limpieza",
-        labels={"Score": "Health Score", "Estado": "Estado"},
-        color_discrete_map={"Antes": "red", "Despues": "green"}
-    )
-    
-    st.plotly_chart(fig_hs, use_container_width=True)
-    
+    with col_b:
+        df_hs_melted = df_hs.melt(id_vars=["Dataset"], value_vars=["Antes", "Despues"], var_name="Estado", value_name="Score")
+        fig_hs = px.bar(
+            df_hs_melted, x="Dataset", y="Score", color="Estado",
+            barmode="group", height=300,
+            color_discrete_map={"Antes": "#EF553B", "Despues": "#00CC96"}
+        )
+        st.plotly_chart(fig_hs, use_container_width=True)
+
     st.markdown("---")
     
     # -----------------------------
-    # Top categorias por ingresos
+    # 3. Top categorías y Alerta de Auditoría
     # -----------------------------
-    st.subheader("🏆 Top Categorias por Ingresos")
+    st.subheader("🏆 Top Categorías por Ingresos")
     
+    # Agrupación y cálculo
     top_categorias = df_filtrado.groupby("Categoria").agg({
         "ingreso_total": "sum",
         "margen_real": "sum",
@@ -96,78 +86,58 @@ def mostrar_resumen_ejecutivo(df_filtrado, health_scores, metricas_calidad):
         "ingreso_total": "Ingresos",
         "margen_real": "Margen",
         "Transaccion_ID": "Transacciones"
-    }).nlargest(5, "Ingresos")
+    })
     
     top_categorias["Margen %"] = (top_categorias["Margen"] / top_categorias["Ingresos"] * 100).round(1)
+    top_df = top_categorias.nlargest(5, "Ingresos").reset_index()
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
         fig_cat = px.bar(
-            top_categorias.reset_index(),
-            x="Categoria",
-            y="Ingresos",
-            color="Margen %",
+            top_df, x="Categoria", y="Ingresos", color="Margen %",
             color_continuous_scale="RdYlGn",
-            title="Top 5 Categorias por Ingresos"
+            title="Distribución de Ingresos y Rentabilidad",
+            hover_data=["Transacciones", "Margen"]
         )
         st.plotly_chart(fig_cat, use_container_width=True)
+        
+        # NOTA DE CONSULTORÍA SOBRE EL MARGEN
+        if "No Catalogado" in top_df["Categoria"].values:
+            st.warning("⚠️ **Nota de Auditoría:** La categoría 'No Catalogado' muestra un margen inflado (~99%) debido a la ausencia de costos unitarios en el maestro de inventario.")
     
     with col2:
+        st.write("**Detalle de Rendimiento**")
         st.dataframe(
-            top_categorias[["Ingresos", "Margen %", "Transacciones"]].style.format({
+            top_df[["Categoria", "Ingresos", "Margen %"]].set_index("Categoria").style.format({
                 "Ingresos": "${:,.0f}",
-                "Margen %": "{:.1f}%",
-                "Transacciones": "{:,.0f}"
-            }),
-            height=400
+                "Margen %": "{:.1f}%"
+            }), height=300
         )
     
     st.markdown("---")
     
     # -----------------------------
-    # Exportar reporte
+    # 4. Exportación de Reportes
     # -----------------------------
     st.subheader("📤 Exportar Reporte Ejecutivo")
     
-    col1, col2, col3 = st.columns(3)
+    col_c1, col_c2, col_c3 = st.columns(3)
     
-    with col1:
-        # Exportar datos filtrados a CSV
+    with col_c1:
         csv = df_filtrado.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Descargar Datos Filtrados (CSV)",
-            data=csv,
-            file_name="datos_filtrados.csv",
-            mime="text/csv"
-        )
+        st.download_button("📥 Datos Filtrados (CSV)", data=csv, file_name="datos_filtrados.csv", mime="text/csv")
     
-    with col2:
-        # Exportar metricas a CSV
+    with col_c2:
         metricas_df = pd.DataFrame(metricas_calidad).T
         csv_metricas = metricas_df.to_csv().encode('utf-8')
-        st.download_button(
-            label="📊 Descargar Metricas (CSV)",
-            data=csv_metricas,
-            file_name="metricas_calidad.csv",
-            mime="text/csv"
-        )
+        st.download_button("📊 Métricas Calidad (CSV)", data=csv_metricas, file_name="metricas_calidad.csv", mime="text/csv")
     
-    with col3:
-        # Generar y descargar PDF ejecutivo
-        if st.button("📄 Generar Reporte Ejecutivo (PDF)"):
-            with st.spinner("Generando PDF..."):
-                pdf_buffer = generar_reporte_ejecutivo_pdf(
-                    df_filtrado, 
-                    health_scores, 
-                    metricas_calidad
-                )
-                st.download_button(
-                    label="⬇️ Descargar PDF",
-                    data=pdf_buffer,
-                    file_name="Reporte_Ejecutivo_TechLogistics.pdf",
-                    mime="application/pdf"
-                )
+    with col_c3:
+        if st.button("📄 Generar Reporte PDF"):
+            with st.spinner("Compilando reporte ejecutivo..."):
+                pdf_buffer = generar_reporte_ejecutivo_pdf(df_filtrado, health_scores, metricas_calidad)
+                st.download_button("⬇️ Descargar PDF", data=pdf_buffer, file_name="Reporte_Ejecutivo_TechLogistics.pdf", mime="application/pdf")
     
     st.markdown("---")
-    st.info("💡 **Nota:** Este dashboard se actualiza automaticamente con los filtros aplicados en el panel izquierdo.")
+    st.info(f"💡 **Estado del Sistema:** Analizando {len(df_filtrado):,} registros únicos bajo los filtros seleccionados.")

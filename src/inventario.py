@@ -58,6 +58,9 @@ def calcular_health_score(df):
     """
     Calcula Health Score según fórmula: 100 × (1 - (0.7 × % Nulos + 0.3 × % Duplicados))
     """
+    if df.empty:
+        return 0, 0, 0
+        
     total_celdas = df.shape[0] * df.shape[1]
     total_nulos = df.isna().sum().sum()
     porcentaje_nulos = total_nulos / total_celdas if total_celdas > 0 else 0
@@ -76,21 +79,40 @@ def calcular_health_score(df):
 
 def procesar_inventario(inventario_path: str) -> tuple:
     """
-    Procesamiento completo del dataset de inventario con auditoría de costos.
+    Procesamiento completo del dataset de inventario con auditoría de costos y bodegas.
     """
     
     # 1. Carga y auditoría inicial
-    inventario_raw = pd.read_csv(inventario_path)
+    try:
+        inventario_raw = pd.read_csv(inventario_path)
+    except Exception as e:
+        return pd.DataFrame(), {"error": str(e)}
+
+    # Limpieza de nombres de columnas (espacios invisibles)
+    inventario_raw.columns = [c.strip() for c in inventario_raw.columns]
+    
     health_antes, pct_nulos_antes, pct_dups_antes = calcular_health_score(inventario_raw)
     
-    # Normalización de columnas críticas
+    # Normalización de columnas críticas (Alias de Bodega)
     if "Bodega_Origen" not in inventario_raw.columns:
         bodega_cols = [col for col in inventario_raw.columns if 'bodega' in col.lower()]
         if bodega_cols:
             inventario_raw = inventario_raw.rename(columns={bodega_cols[0]: "Bodega_Origen"})
     
-    # 2. Limpieza de Strings y Fechas
+    # 2. Limpieza de Strings, Fechas y NORMALIZACIÓN
     df_inventario = inventario_raw.copy()
+    
+    # --- NORMALIZACIÓN DE BODEGAS (Solución a norte vs Norte) ---
+    if "Bodega_Origen" in df_inventario.columns:
+        df_inventario["Bodega_Origen"] = (
+            df_inventario["Bodega_Origen"]
+            .astype(str)
+            .str.strip()
+            .str.upper() # Convertimos todo a MAYÚSCULAS para unificar
+        )
+        # Reemplazos específicos si se desea un formato más legible
+        mapeo_bodegas = {"NORTE": "Norte", "SUR": "Sur", "CENTRO": "Centro"}
+        df_inventario["Bodega_Origen"] = df_inventario["Bodega_Origen"].replace(mapeo_bodegas)
     
     # Normalización de Categoría
     df_inventario["Categoria"] = df_inventario["Categoria"].astype(str).str.lower().str.strip()
@@ -102,19 +124,27 @@ def procesar_inventario(inventario_path: str) -> tuple:
     # Conversión de fecha robusta
     df_inventario["Ultima_Revision"] = pd.to_datetime(df_inventario["Ultima_Revision"], errors="coerce")
     
-    # 3. Corrección de Stock Negativo (Preservando magnitud por error contable común)
+    # 3. Corrección de Stock Negativo
     stock_negativos = (df_inventario["Stock_Actual"] < 0).sum()
-    df_inventario["Stock_Actual"] = df_inventario["Stock_Actual"].fillna(0).abs()
+    df_inventario["Stock_Actual"] = pd.to_numeric(df_inventario["Stock_Actual"], errors="coerce").fillna(0).abs()
     
     # 4. Auditoría y Corrección de Costos (IQR por Categoría)
-    # Identificar outliers antes de corregir para el reporte de Fuga de Capital
-    lower_b, upper_b = iqr_bounds(df_inventario["Costo_Unitario_USD"])
-    mascara_outliers = (df_inventario["Costo_Unitario_USD"] < lower_b) | (df_inventario["Costo_Unitario_USD"] > upper_b)
+    df_inventario["Costo_Unitario_USD"] = pd.to_numeric(df_inventario["Costo_Unitario_USD"], errors="coerce")
+    
+    # Lógica para evitar errores si no hay suficientes datos para IQR
+    try:
+        lower_b, upper_b = iqr_bounds(df_inventario["Costo_Unitario_USD"].dropna())
+        mascara_outliers = (df_inventario["Costo_Unitario_USD"] < lower_b) | (df_inventario["Costo_Unitario_USD"] > upper_b)
+    except:
+        mascara_outliers = pd.Series([False] * len(df_inventario))
+        
     costos_outliers_total = mascara_outliers.sum()
     
     # Imputación estratégica: Mediana por categoría
     costo_mediana_cat = df_inventario.groupby("Categoria")["Costo_Unitario_USD"].transform("median")
     df_inventario.loc[mascara_outliers, "Costo_Unitario_USD"] = costo_mediana_cat[mascara_outliers]
+    # Si aún hay nulos (categorías sin mediana), usar la mediana global
+    df_inventario["Costo_Unitario_USD"] = df_inventario["Costo_Unitario_USD"].fillna(df_inventario["Costo_Unitario_USD"].median())
     
     # 5. Imputación de Lead Time (Mediana por categoría)
     df_inventario["Lead_Time_Dias"] = df_inventario.groupby("Categoria")["Lead_Time_Dias"].transform(lambda x: x.fillna(x.median()))
