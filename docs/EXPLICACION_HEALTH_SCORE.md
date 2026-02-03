@@ -1,93 +1,48 @@
-﻿# Health Score General – Explicación Ejecutiva
+﻿# 📊 Guía Rápida: Health Score de Datos (TechLogistics)
 
-## ¿Qué es el Health Score?
+## 1. ¿Qué mide esta métrica?
+El **Health Score** es la nota de "salud" de la información. Dice qué tan confiable es un reporte antes de usarlo para tomar decisiones.
 
-El **Health Score** es una métrica agregada (0-100) que mide la **calidad general de los datos** de un dataset, considerando:
+**La fórmula aplicada es:**
+> **Health Score = 100 × (1 - (0.7 × % Nulos + 0.3 × % Duplicados))**
 
-- **70% nulidad** (registros faltantes)
-- **30% duplicados** (redundancia)
-
-**Fórmula:**
-
-Health Score = 100 × (1 - (0.7 × % Nulos + 0.3 × % Duplicados))
+* **70% del peso:** Penaliza la falta de información (celdas vacías).
+* **30% del peso:** Penaliza la repetición de datos (registros duplicados).
 
 ---
 
-## Columnas de la Tabla
+## 2. Niveles de Confianza
 
-| Columna | Significado |
-|---------|-------------|
-| **Antes** | Health Score del dataset CRUDO (como llegó del sistema operacional) |
-| **Después** | Health Score del dataset PROCESADO (después de limpieza y curaduría) |
-
----
-
-## Interpretación Ejecutiva
-
-### Ejemplo Real: Dataset Feedback
-
-**Antes:**
-- Nulidad: 8% (múltiples campos vacíos; ej: edad = 195)
-- Duplicados: 2.1% (59 registros exactamente idénticos)
-- **Health Score = 100 × (1 - (0.7×0.08 + 0.3×0.021)) = 100 × (1 - 0.0623) = 93.77**
-
-**Después (posterior a limpieza):**
-- Nulidad: 0.2% (solo campos sin información viable; ej: comentario en blanco)
-- Duplicados: 0% (eliminados todos los exactos)
-- **Health Score = 100 × (1 - (0.7×0.002 + 0.3×0)) = 100 × (1 - 0.0014) = 99.86**
-
-**Mejora:** +6.09 puntos → **Reducción de riesgo analítico del 6%**
+| Score | Calidad | ¿Es confiable? |
+| :--- | :--- | :--- |
+| **90% - 100%** | ⭐ **Excelente** | Sí, los datos son sólidos y coherentes. |
+| **80% - 89%** | ⚠️ **Aceptable** | Sí, pero requiere supervisión humana. |
+| **Bajo 70%** | ❌ **Riesgoso** | No, puede llevar a conclusiones erróneas. |
 
 ---
 
-### ¿Qué significan los rangos?
+## 3. Resultado de la Auditoría Real (TechLogistics)
 
-| Rango | Significado | Acción |
-|-------|-------------|--------|
-| 90-100 | Excelente: Listo para análisis sin advertencias | ✅ Proceder |
-| 80-89 | Bueno: Aceptable con contexto | ⚠️ Revisar metodología |
-| 70-79 | Aceptable: Usar con precaución | 🔴 Documentar limitaciones |
-| <70 | Pobre: Alto riesgo analítico | ❌ No usar para decisiones críticas |
+Tras procesar los datos actuales, estos son los niveles de confianza alcanzados:
 
----
+### 📈 Módulo Inventario
+* **Antes:** 98.24% | **Después:** **98.93%**
+* **Mejora:** +0.69
 
-### Interpretación Antes/Después en TechLogistics
+### 📈 Módulo Transacciones
+* **Antes:** 100.0% | **Después:** **100.0%**
+* **Mejora:** 0.0
 
-**Feedback:**
-- Antes: 93.77 (muy bueno; pocos problemas)
-- Después: 99.86 (excelente; eliminamos ruido)
-- **Conclusión:** Los datos de feedback eran relativamente limpios; la curaduría mejoró principalmente por eliminar duplicados y edades imposibles.
-
-**Inventario:**
-- Antes: 78.45 (aceptable; hay outliers)
-- Después: 96.32 (excelente; limpiamos costos anómalos)
-- **Conclusión:** Había problemas significativos (costos de $850k, stock negativo). La curaduría fue crítica.
-
-**Transacciones:**
-- Antes: 85.63 (bueno; algunos nulos)
-- Después: 97.18 (excelente; imputamos estratégicamente)
-- **Conclusión:** La imputación contextual (por ruta, por categoría) fue efectiva.
+### 📈 Módulo Feedback
+* **Antes:** 96.93% | **Después:** **97.70%**
+* **Mejora:** +0.77
 
 ---
 
-## Mensaje para la Junta
+## 4. Conceptos Clave en el Dashboard
 
-> *"El Health Score mejora de 85.6 a 97.2 en transacciones. Esto significa:*
-> - *Reducimos nulidad del 8% al 0.5%*
-> - *Eliminamos redundancias que causaban inflación de análisis*
-> - *Incrementamos confiabilidad de decisiones basadas en datos en ~12%*
-> - *El DSS ahora opera con 97.2% de confianza estadística, vs. 85.6% inicial."*
+1.  **Health Score Inicial:** La calidad de los datos tal cual vienen del sistema operativo.
+2.  **Health Score Final:** La calidad real después de nuestra limpieza técnica y ética.
+3.  **Celdas Vacías:** Datos que faltaban y que el sistema gestionó para no romper los cálculos.
 
 ---
-
-## Cálculo Real en el Código
-
-**Aplicado:**
-- `df.shape[0]` = número de filas
-- `df.shape[1]` = número de columnas
-- `df.isna().sum().sum()` = total de NaN en todo el dataframe
-- `df.duplicated().mean()` = proporción de filas duplicadas
-
----
-
-

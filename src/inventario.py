@@ -90,12 +90,12 @@ def procesar_inventario(inventario_path: str) -> tuple:
     except Exception as e:
         return pd.DataFrame(), {"error": str(e)}
 
-    # Limpieza de nombres de columnas (espacios invisibles)
+    # Limpieza de nombres de columnas
     inventario_raw.columns = [c.strip() for c in inventario_raw.columns]
     
     health_antes, pct_nulos_antes, pct_dups_antes = calcular_health_score(inventario_raw)
     
-    # Normalización de columnas críticas (Alias de Bodega)
+    # Normalización de columnas críticas
     if "Bodega_Origen" not in inventario_raw.columns:
         bodega_cols = [col for col in inventario_raw.columns if 'bodega' in col.lower()]
         if bodega_cols:
@@ -104,15 +104,14 @@ def procesar_inventario(inventario_path: str) -> tuple:
     # 2. Limpieza de Strings, Fechas y NORMALIZACIÓN
     df_inventario = inventario_raw.copy()
     
-    # --- NORMALIZACIÓN DE BODEGAS (Solución a norte vs Norte) ---
     if "Bodega_Origen" in df_inventario.columns:
         df_inventario["Bodega_Origen"] = (
             df_inventario["Bodega_Origen"]
             .astype(str)
             .str.strip()
-            .str.upper() # Convertimos todo a MAYÚSCULAS para unificar
+            .str.upper()
         )
-        # Reemplazos específicos si se desea un formato más legible
+        
         mapeo_bodegas = {"NORTE": "Norte", "SUR": "Sur", "CENTRO": "Centro"}
         df_inventario["Bodega_Origen"] = df_inventario["Bodega_Origen"].replace(mapeo_bodegas)
     

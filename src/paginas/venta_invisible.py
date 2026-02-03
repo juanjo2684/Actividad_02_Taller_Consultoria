@@ -4,10 +4,7 @@ import pandas as pd
 import plotly.express as px
 
 def mostrar_venta_invisible(df_filtrado):
-    """
-    Analiza el impacto financiero de ventas sin SKU en el maestro de inventario.
-    Responde a la Pregunta Ejecutiva 3: Cuantificación de riesgo por falta de control.
-    """
+
     st.header("👻 Análisis de la Venta Invisible")
     
     # 1. Segmentación de Datos
