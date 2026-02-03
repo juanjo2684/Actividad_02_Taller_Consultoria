@@ -11,7 +11,9 @@ CATEGORIAS_NORMALIZADAS = {
     "laptops": "laptop",
     "smart-phone": "smartphone",
     "smartphones": "smartphone",
-    "???": pd.NA,
+    "???": np.nan,
+    "unknown": np.nan,
+    "sin categoria": np.nan
 }
 
 # -----------------------------
@@ -116,7 +118,7 @@ def procesar_inventario(inventario_path: str) -> tuple:
     
     # Normalización de Categoría
     df_inventario["Categoria"] = df_inventario["Categoria"].astype(str).str.lower().str.strip()
-    df_inventario["Categoria"] = df_inventario["Categoria"].map(CATEGORIAS_NORMALIZADAS).fillna(df_inventario["Categoria"])
+    df_inventario["Categoria"] = df_inventario["Categoria"].replace(CATEGORIAS_NORMALIZADAS)
     
     # Procesamiento de Lead Time
     df_inventario["Lead_Time_Dias"] = df_inventario["Lead_Time_Dias"].map(select_max_lead_time)

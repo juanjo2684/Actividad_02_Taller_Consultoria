@@ -70,7 +70,7 @@ def mostrar_crisis_logistica(df_filtrado):
     )
     st.plotly_chart(fig_heat, use_container_width=True)
 
-    # 4. Análisis de Correlación por Ciudad (EL GRÁFICO QUE APARECÍA VACÍO)
+    # 4. Análisis de Correlación por Ciudad
     st.subheader("📉 Correlación Específica por Ciudad")
     
     correlaciones_ciudad = []
@@ -105,4 +105,3 @@ def mostrar_crisis_logistica(df_filtrado):
         with st.expander("📝 Dictamen del Consultor Logístico"):
             st.error(f"Priorizar auditoría en ruta: **{ruta_peor['Bodega_Origen']} ➔ {ruta_peor['Ciudad_Destino']}**.")
             st.write(f"- **Tiempo prom.:** {ruta_peor['Tiempo_Entrega']:.1f} días.")
-            st.info("Nota: La correlación indica qué tan sensibles son los clientes al tiempo en esta zona.")

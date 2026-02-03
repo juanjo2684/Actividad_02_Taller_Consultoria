@@ -74,7 +74,7 @@ def mostrar_venta_invisible(df_filtrado):
     # 5. Diagnóstico Ejecutivo
     with st.expander("💡 Conclusión del Consultor"):
         if pct_ingreso_riesgo > 10:
-            st.error(f"⚠️ **ALERTA CRÍTICA:** El {pct_ingreso_riesgo:.1f}% de tus ingresos no tiene trazabilidad de costo. Estás operando a ciegas sobre el margen real de estos productos.")
+            st.error(f"⚠️ **ALERTA CRÍTICA:** El {pct_ingreso_riesgo:.1f}% de los ingresos no tiene trazabilidad de costo. Se esta operando a ciegas sobre el margen real de estos productos.")
         elif pct_ingreso_riesgo > 5:
             st.warning("🟡 **RIESGO MODERADO:** Existe una brecha de catalogación. Es probable que sean lanzamientos de productos nuevos no registrados en el sistema central.")
         else:

@@ -51,8 +51,8 @@ def crear_dataset_consolidado(df_trans, df_inv, df_feed):
     )
     
     # 4. Rellenos de seguridad para que los cálculos no den NaN
-    df_final["Categoria"] = df_final["Categoria"].fillna("No Catalogado")
-    df_final["venta_sin_inventario"] = df_final["Categoria"] == "No Catalogado"
+    df_final["Categoria"] = df_final["Categoria"].fillna("no catalogado")
+    df_final["venta_sin_inventario"] = df_final["Categoria"] == "no catalogado"
     df_final["NPS_Numerico"] = df_final["NPS_Numerico"].fillna(5)
     df_final["Stock_Actual"] = df_final["Stock_Actual"].fillna(0)
     df_final["Tiempo_Entrega"] = df_final["Tiempo_Entrega"].fillna(0)
