@@ -9,6 +9,7 @@ from src.paginas.crisis_logistica import mostrar_crisis_logistica
 from src.paginas.venta_invisible import mostrar_venta_invisible
 from src.paginas.diagnostico_fidelidad import mostrar_diagnostico_fidelidad
 from src.paginas.riesgo_operativo import mostrar_riesgo_operativo
+from src.paginas.salud_dato import mostrar_salud_datos
 
 # -----------------------------
 # 1. Configuración de la página
@@ -23,8 +24,8 @@ st.set_page_config(
 # -----------------------------
 # 2. Carga de datos centralizada
 # -----------------------------
-# El spinner solo aparecerá la primera vez gracias al cache en data_loader
 try:
+    # Capturamos df, health_scores (antes/despues) y metricas_calidad (detalles)
     df_dss, health_scores, metricas_calidad = cargar_datos()
 except Exception as e:
     st.error(f"❌ Error al cargar los datos: {e}")
@@ -33,16 +34,13 @@ except Exception as e:
 # -----------------------------
 # 3. Sidebar y Filtros Globales
 # -----------------------------
-# Esta función ahora retorna el DF filtrado que usaremos en todas las tabs
 df_filtrado = crear_sidebar_filtros(df_dss)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("📥 Exportar Datos Consolidados")
 
-# Convertir el DataFrame a CSV (en memoria)
 @st.cache_data
 def convertir_df_a_csv(df):
-    # Usamos utf-8-sig para que Excel abra bien las tildes en Windows
     return df.to_csv(index=False).encode('utf-8-sig')
 
 csv_master = convertir_df_a_csv(df_filtrado)
@@ -71,7 +69,8 @@ tabs = st.tabs([
     "🚚 Crisis Logística", 
     "👻 Venta Invisible",
     "⭐ Diagnóstico Fidelidad",
-    "⚠️ Riesgo Operativo"
+    "⚠️ Riesgo Operativo",
+    "📊 Salud de los Datos"
 ])
 
 # Ruteo de funciones a cada pestaña
@@ -92,6 +91,9 @@ with tabs[4]:
 
 with tabs[5]:
     mostrar_riesgo_operativo(df_filtrado)
+
+with tabs[6]:
+    mostrar_salud_datos(df_filtrado, metricas_calidad)
 
 # -----------------------------
 # Footer

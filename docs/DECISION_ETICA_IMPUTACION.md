@@ -2,46 +2,47 @@
 
 ## Resumen Ejecutivo
 
-El procesamiento aplicado sigue el principio: **"Preservar información cuando sea defendible; eliminar solo cuando sea comprometedor."**
+El procesamiento aplicado sigue el principio: **"Preservar la integridad del hecho económico y operativo, corrigiendo inconsistencias técnicas mediante métodos estadísticos robustos (Mediana/Moda) para evitar sesgos por valores atípicos."**
 
 ---
 
 ## 1. FEEDBACK (Clientes)
 
-### 1.1 Qué se ELIMINÓ (Duplicados Exactos)
-**Decisión:** Eliminar registros duplicados 100%.
+### 1.1 Qué se ELIMINÓ
+**Decisión:** Eliminar registros 100% duplicados basados en `Transaccion_ID`.
 
 **Justificación:**
-- Un feedback duplicado es una **redundancia pura** sin valor analítico.
-- Causa: errores de ingreso o sincronización de sistemas.
-- **Impacto:** Nulo en fidelidad; al contrario, reduce ruido.
-- **Ejemplo:** Si dos registros idénticos (mismo cliente, feedback, fecha) existen, uno es error administrativo.
-
-**Acción:** Drop duplicates (todas las columnas iguales).
+- Un registro de feedback duplicado para una misma transacción infla el NPS.
 
 ---
 
 ### 1.2 Qué se IMPUTÓ (Edades fuera de rango)
 
-**Registros identificados:** Edades < 18 o > 90 años (ej: 195 años).
+**Registros identificados:** Edades no numéricas o fuera del rango lógico (ej: 195 años).
 
-**Decisión:** **IMPUTAR con MEDIANA** (no media).
+**Decisión:** **IMPUTAR con MEDIANA (35 años)**.
+
+**Justificación:**
+- Usar la mediana (35) sitúa al cliente en el segmento demográfico más representativo de la empresa.
 
 ---
 
-### 1.3 Qué se IMPUTÓ (Recomendación de Marca)
+### 1.3 Qué se NORMALIZÓ (Escala NPS)
 
-**Registros identificados:** NaN, "N/A", valores inconsistentes.
+**Registros identificados:** Valores en escala -100 a 100 o nulos.
 
-**Decisión:** **IMPUTAR con MODA** (valor más frecuente).
+**Decisión:** **REESCALAR a 1-10 e IMPUTAR nulos con 5.0**.
+
+**Justificación:**
+- La inconsistencia de escalas impide el cálculo de KPIs globales.
+- Se mapean valores negativos a la zona baja (1-4) y positivos a la zona alta (6-10). Los nulos se tratan como "Neutros" (5.0).
 
 ---
 
 ## 2. INVENTARIO (Maestro de Productos)
 
 ### 2.1 Qué se ELIMINÓ
-
-**Nada se eliminó por completo.**
+**Nada.** Se preserva el catálogo completo para asegurar que no existan sin referencia de producto.
 
 ---
 
@@ -49,106 +50,74 @@ El procesamiento aplicado sigue el principio: **"Preservar información cuando s
 
 #### **2.2.1 Lead_Time_Dias**
 
-**Registros identificados:** NaN, "nan", "Inmediato", "25-30 días" (texto sucio).
+**Registros identificados:** Strings como "25-30 días", "Inmediato", "nan".
 
-**Decisión:** **IMPUTAR con MEDIANA por Categoría**.
+**Decisión:** **EXTRACCIÓN NUMÉRICA + MEDIANA por Categoría**.
 
-**Jerarquía:**
-1. Primero: Imputar por **categoría** (mismo tipo de producto → tiempo similar).
-2. Si categoría aún tiene NaN: Usar mediana **global**.
-
----
-
-#### **2.2.2 Costo_Unitario_USD**
-
-**Registros identificados:** Outliers detectados por **método IQR (Interquartile Range)**.
-
-**Decisión:** **REEMPLAZAR OUTLIERS CON MEDIANA POR CATEGORÍA**.
+**Justificación:**
+- Se extrae el valor máximo (ej: "25-30" -> 30) para un análisis de riesgo conservador.
+- Los nulos se imputan por **Categoría**.
 
 ---
 
-#### **2.2.3 Stock_Actual**
+#### **2.2.2 Costo_Unitario_USD (Outliers)**
 
-**Registros identificados:** Valores negativos (ej: -5, -49 unidades).
+**Registros identificados:** Valores extremos detectados por **Método IQR** (ej: $0.01 o $850k).
+
+**Decisión:** **REEMPLAZAR con MEDIANA por Categoría**.
+
+**Justificación:**
+- Un costo de $0.01 arruina el cálculo de margen real.
+- La mediana por categoría es el estimador más fiel al valor de mercado.
+
+---
+
+#### **2.2.3 Stock_Actual (Valores Negativos)**
+
+**Registros identificados:** Unidades menores a cero.
 
 **Decisión:** **CONVERTIR A POSITIVOS (valor absoluto)**.
 
 **Justificación:**
-- Stock negativo es **lógicamente imposible** en inventario real.
-- Causa probable: Error de registro (devolución no reconciliada).
-- **No es outlier a eliminar**, es error que debe corregirse.
-- Tomar valor absoluto preserva la **magnitud del problema** (hay desajuste de 49 unidades).
+- Físicamente no existe el "stock negativo".
 
 ---
 
-## 3. TRANSACCIONES (Ventas)
+## 3. TRANSACCIONES (Ventas y Logística)
 
 ### 3.1 Qué se ELIMINÓ
-
-**Nada.** (Las transacciones son hechos históricos; eliminarlas oculta problemas.)
+**Nada.** Las transacciones son el registro histórico de ingresos.
 
 ---
 
 ### 3.2 Qué se IMPUTÓ
 
-#### **3.2.1 Cantidad_Vendida (valores negativos)**
+#### **3.2.1 Cantidad_Vendida (Negativos)**
 
-**Registros identificados:** Cantidad < 0 (ej: -5 unidades).
+**Registros identificados:** Valores < 0.
 
 **Decisión:** **CONVERTIR A POSITIVOS (valor absoluto)**.
 
 **Justificación:**
-- Cantidad negativa representa **devoluciones o ajustes**.
-- No es error a eliminar; es transacción real que debe registrarse.
-- Tomar absoluto preserva magnitud; el signo se captura en `Estado_Envio = Devuelto`.
+- Lo mas probable es que representes errores en el ingreso del dato.
 
 ---
 
-#### **3.2.2 Tiempo_Entrega_Real (NaN)**
+#### **3.2.2 Tiempo_Entrega (Outliers de Sistema)**
 
-**Registros identificados:** Falta tiempo de entrega para ~12% de transacciones.
+**Registros identificados:** Valores de "999" días o nulos.
 
-**Decisión:** **IMPUTAR CON MEDIANA por ruta (Bodega_Origen + Ciudad_Destino)**.
-
----
-
-#### **3.2.3 Costo_Envio (NaN)**
-
-**Registros identificados:** Falta costo para ~8% de transacciones.
-
-**Decisión:** 
-1. **Primero:** Si `Canal_Venta = Físico` → `Costo_Envio = 0` (sin envío).
-2. **Luego:** Imputar restantes con **MEDIANA por ruta**.
+**Decisión:** **REEMPLAZAR con NaN e IMPUTAR con Mediana por Ruta**.
 
 **Justificación:**
-- Venta física no requiere envío (costo lógicamente nulo).
-- Para online: Mediana por ruta captura variabilidad logística.
+- "999" puede ser un error de software.
 
 ---
 
-## 4. SÍNTESIS DE DECISIÓN ÉTICA
+#### **3.2.3 Costos de Envío (Nulos)**
 
-| Dataset | Acción | Método | Justificación |
-|---------|--------|--------|---------------|
-| Feedback | Eliminar duplicados | Drop | Redundancia pura sin valor |
-| Feedback | Imputar edades | Mediana | Robusta a outliers (195 años) |
-| Feedback | Imputar marca | Moda | Variable categórica; refleja sentimiento |
-| Inventario | Reemplazar costos outliers | Mediana/Categoría | Preserva fila; corrige error probable |
-| Inventario | Imputar lead time | Mediana/Categoría | Contexto de negocio por tipo producto |
-| Inventario | Corregir stock negativo | Abs() | Preserva magnitud; es desajuste real |
-| Transacciones | Corregir cantidad negativa | Abs() | Es devolución, capturada en Estado |
-| Transacciones | Imputar tiempo entrega | Mediana/Ruta | Contexto geográfico-logístico |
-| Transacciones | Imputar costo envío | 0 o Mediana/Ruta | Lógica de canal + contexto |
+**Registros identificados:** Valores faltantes en envíos online.
+
+**Decisión:** **IMPUTACIÓN CON MEDIANA POR RUTA**.
 
 ---
-
-## 5. PRINCIPIOS SUBYACENTES
-
-1. **Máxima Preservación:** Nunca eliminar filas completas si el error es corregible.
-2. **Contexto Operativo:** Usar mediana/moda respetando estructura de negocio (rutas, categorías).
-3. **Robustez Estadística:** Mediana > Media cuando hay outliers; Moda para categóricas.
-4. **Auditabilidad:** Toda decisión debe justificarse en términos de negocio + estadística.
-5. **Señal vs. Ruido:** Valores imposibles (195 años) son ruido; devoluciones son señal.
-
----
-

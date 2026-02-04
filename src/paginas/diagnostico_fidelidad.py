@@ -5,23 +5,22 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 def mostrar_diagnostico_fidelidad(df_filtrado):
-    """
-    Analiza la paradoja de stock alto vs sentimiento negativo.
-    Responde a la Pregunta Ejecutiva 4: ¿Calidad de producto o sobrecosto?
-    """
+
     st.header("⭐ Diagnóstico de Fidelidad del Cliente")
     
     # 1. KPIs de Sentimiento
+    # Estos ahora incluyen los NPS 5.0, dando una visión real del promedio global.
     col1, col2, col3 = st.columns(3)
     
     with col1:
         nps_avg = df_filtrado["NPS_Numerico"].mean()
-        st.metric("NPS Promedio", f"{nps_avg:.2f}/10")
+        st.metric("NPS Promedio", f"{nps_avg:.2f}/10", 
+                  help="Promedio global incluyendo todas las calificaciones validadas.")
     
     with col2:
         casos_paradoja = df_filtrado["paradoja_fidelidad"].sum()
         st.metric("📦 Casos de Paradoja", f"{casos_paradoja}", 
-                  help="Productos con Stock Alto (>Q3) y NPS Bajo (<7)")
+                  help="Productos con Stock Alto (>Q3) y NPS Bajo (<7). Incluye los registros de NPS 5.0.")
     
     with col3:
         rating_prod = df_filtrado["Rating_Producto"].mean()
@@ -40,6 +39,8 @@ def mostrar_diagnostico_fidelidad(df_filtrado):
         "NPS_Numerico": "mean"
     }).reset_index()
 
+    # El color ahora mostrará de forma más realista las categorías "tibias" (amarillo/naranja) 
+    # debido a la presencia de los NPS 5.0.
     fig_bubble = px.scatter(
         df_cat,
         x="Rating_Producto",
@@ -48,7 +49,8 @@ def mostrar_diagnostico_fidelidad(df_filtrado):
         color="NPS_Numerico",
         hover_name="Categoria",
         color_continuous_scale="RdYlGn",
-        labels={"Rating_Producto": "Calidad (Rating)", "Precio_Venta_Final": "Precio Promedio (USD)"},
+        range_color=[0, 10], # Forzamos escala de 0 a 10 para ver el impacto real
+        labels={"Rating_Producto": "Calidad (Rating)", "Precio_Venta_Final": "Precio Promedio (USD)", "NPS_Numerico": "NPS Avg"},
         title="Cuadrantes: Precio vs Calidad (Tamaño = Stock disponible)"
     )
     
@@ -61,6 +63,7 @@ def mostrar_diagnostico_fidelidad(df_filtrado):
     # 3. Zoom en Categorías con Paradoja
     st.subheader("🚨 Categorías en Zona de Riesgo")
     
+    # Aquí se listarán las categorías donde los NPS 5.0 están "estancando" el inventario
     df_paradoja_resumen = df_filtrado[df_filtrado["paradoja_fidelidad"]].groupby("Categoria").agg({
         "Transaccion_ID": "count",
         "Stock_Actual": "mean",
@@ -83,15 +86,20 @@ def mostrar_diagnostico_fidelidad(df_filtrado):
         
         with col_left:
             st.write("**Hipótesis de Sobrecosto:**")
-            st.info("Si el producto tiene buen Rating (>4) pero NPS bajo y stock alto, el problema es el **precio**. El cliente valora el producto pero no lo recomienda por su costo.")
+            st.info("Si el producto tiene buen Rating (>4) pero NPS bajo (como los 5.0 detectados) y stock alto, el problema es el **precio**. El cliente está satisfecho con el objeto pero no con el valor percibido.")
             
         with col_right:
             st.write("**Hipótesis de Calidad:**")
-            st.warning("Si el Rating es bajo (<3) y el stock es alto, el producto es **deficiente**. El stock se acumula porque el mercado ha rechazado la calidad del SKU.")
+            st.warning("Si el Rating es bajo (<3) y el stock es alto, el producto es **deficiente**. El inventario no rota porque la experiencia de uso es mala.")
 
     # 5. Distribución de NPS
     st.subheader("📈 Distribución de Lealtad (NPS)")
+    
+    # Al incluir los 5.0, la columna de 'Detractor' o 'Pasivo' crecerá significativamente,
+    # mostrando el volumen real de clientes que no están promoviendo la marca.
     fig_nps = px.histogram(df_filtrado, x="NPS_Categoria", color="NPS_Categoria",
-                          color_discrete_map={"Promotor": "green", "Pasivo": "yellow", "Detractor": "red"},
-                          title="Volumen de Clientes por Categoría NPS")
+                          category_orders={"NPS_Categoria": ["Promotor", "Pasivo", "Detractor"]},
+                          color_discrete_map={"Promotor": "#2ecc71", "Pasivo": "#f1c40f", "Detractor": "#e74c3c"},
+                          title="Volumen Real de Clientes por Categoría (Incluye NPS 5.0)")
+    
     st.plotly_chart(fig_nps, use_container_width=True)
