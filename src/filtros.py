@@ -3,10 +3,7 @@ import streamlit as st
 import pandas as pd
 
 def crear_sidebar_filtros(df_dss):
-    """
-    Crea los filtros en el sidebar y aplica al DataFrame.
-    Retorna el DataFrame filtrado para alimentar el Resumen Ejecutivo y demás páginas.
-    """
+
     st.sidebar.title("🎛️ Panel de Control")
     st.sidebar.markdown("---")
     
@@ -15,7 +12,7 @@ def crear_sidebar_filtros(df_dss):
     
     df_filtrado = df_dss.copy()
     
-    # 1. Filtro por Categoría (Incluye 'No Catalogado' de la Venta Invisible)
+    # 1. Filtro por Categoría (Incluye 'no Catalogado' de la Venta Invisible)
     if "Categoria" in df_dss.columns:
         # Obtenemos todas las categorías únicas
         categorias = sorted(df_dss["Categoria"].unique().tolist())
@@ -33,12 +30,12 @@ def crear_sidebar_filtros(df_dss):
         city_sel = st.sidebar.multiselect(
             "Ciudad Destino",
             options=ciudades,
-            default=ciudades # Iniciamos con visión global
+            default=ciudades 
         )
         if city_sel:
             df_filtrado = df_filtrado[df_filtrado["Ciudad_Destino"].isin(city_sel)]
 
-    # 3. Filtro por Estado de Envío (Clave para Crisis Logística)
+    # 3. Filtro por Estado de Envío
     if "Estado_Envio" in df_dss.columns:
         estados = sorted(df_dss["Estado_Envio"].dropna().unique().tolist())
         estado_sel = st.sidebar.multiselect(
@@ -71,7 +68,7 @@ def crear_sidebar_filtros(df_dss):
                 (df_filtrado["Fecha_Venta"].dt.date <= rango_fechas[1])
             ]
     
-    # 5. Segmentación por Rentabilidad (Filtro Rápido para Fuga de Capital)
+    # 5. Segmentación por Rentabilidad
     st.sidebar.markdown("---")
     st.sidebar.subheader("💸 Filtros de Margen")
     solo_negativos = st.sidebar.checkbox("Mostrar solo Margen Negativo")

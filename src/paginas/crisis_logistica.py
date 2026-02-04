@@ -5,30 +5,31 @@ import plotly.express as px
 import numpy as np
 
 def mostrar_crisis_logistica(df_filtrado):
-    """
-    Analiza la crisis logística y detecta rutas críticas.
-    Responde a la Pregunta Ejecutiva 2: ¿Dónde cambiar de operador?
-    """
+
     st.header("🚚 Crisis Logística y Cuellos de Botella")
     
     # ---------------------------------------------------------
     # 1. Preparación de Datos (FILTRO INTELIGENTE)
     # ---------------------------------------------------------
-    # A. Quitamos nulos
     df_log = df_filtrado.dropna(subset=["Tiempo_Entrega", "NPS_Numerico"]).copy()
     
-    # B. Filtramos los "falsos positivos" (NPS 5.0 por defecto) y tiempos irreales (outliers como 999)
-    # Esto permite que la correlación sea matemáticamente calculable
+    # Normalización de texto para evitar errores por espacios o mayúsculas
+    df_log["Ciudad_Destino"] = df_log["Ciudad_Destino"].astype(str).str.strip().str.upper()
+
+    # Mantenemos los NPS 5.0 (según solicitud) y solo filtramos outliers de tiempo
     df_analisis = df_log[
-        (df_log["NPS_Numerico"] != 5.0) & 
         (df_log["Tiempo_Entrega"] < 100) & 
         (df_log["Tiempo_Entrega"] > 0)
     ].copy()
 
-    # Si después del filtro nos quedamos sin datos, usamos el dataframe original 
-    # pero al menos quitamos los outliers de tiempo para no romper el gráfico
     if df_analisis.empty:
         df_analisis = df_log[df_log["Tiempo_Entrega"] < 100].copy()
+
+    # C. Limpieza de Hallazgo: Exclusión estricta de Canal Digital
+    filtro_canal = df_analisis["Ciudad_Destino"].str.contains("CANAL DIGITAL|DIGITAL", na=False)
+    registros_canal_digital = df_analisis[filtro_canal].shape[0]
+
+    df_geo = df_analisis[~filtro_canal].copy()
 
     # ---------------------------------------------------------
     # 2. KPIs de Desempeño Logístico
@@ -38,45 +39,60 @@ def mostrar_crisis_logistica(df_filtrado):
         tiempo_avg = df_analisis["Tiempo_Entrega"].mean()
         st.metric("⏳ Tiempo Entrega Prom.", f"{tiempo_avg:.1f} días")
     with col2:
-        # Correlación Global
         corr_global = df_analisis["Tiempo_Entrega"].corr(df_analisis["NPS_Numerico"])
-        st.metric("🔗 Correlación NPS vs Tiempo", f"{corr_global:.2f}" if not np.isnan(corr_global) else "N/A", 
-                  help="Valores cercanos a -1 indican que a mayor tiempo, menor satisfacción.")
+        st.metric("🔗 Correlación NPS vs Tiempo", f"{corr_global:.2f}" if not np.isnan(corr_global) else "N/A")
     with col3:
         brecha_max = df_analisis["brecha_entrega"].max() if "brecha_entrega" in df_analisis.columns else 0
         st.metric("🚩 Brecha Máxima", f"{brecha_max:.0f} días")
 
+    if registros_canal_digital > 0:
+        st.info(f"🔎 **Hallazgo de Auditoría:** Se detectaron {registros_canal_digital} registros etiquetados como 'CANAL DIGITAL'. "
+                "Estos han sido removidos de las gráficas de rutas físicas para normalizar el análisis geográfico.")
+
     st.markdown("---")
 
-    # 3. Identificación de la Zona Crítica (Heatmap)
-    st.subheader("📍 Mapa de Calor: ¿En qué ruta fallamos?")
+    # ---------------------------------------------------------
+    # 3. Identificación de la Zona Crítica
+    # ---------------------------------------------------------
+    st.subheader("📍 Mapa de Calor: ¿En qué ruta física fallamos?")
     
-    df_rutas = df_analisis.groupby(["Bodega_Origen", "Ciudad_Destino"]).agg({
+    df_rutas = df_geo.groupby(["Bodega_Origen", "Ciudad_Destino"]).agg({
         "NPS_Numerico": "mean",
         "Tiempo_Entrega": "mean",
         "Transaccion_ID": "count"
     }).reset_index()
 
-    df_rutas["score_crisis"] = df_rutas["Tiempo_Entrega"] / (df_rutas["NPS_Numerico"] + 0.1)
+    if not df_rutas.empty:
+        # El score de crisis ahora es más sensible a los NPS bajos al incluir los 5.0 en el promedio general
+        df_rutas["score_crisis"] = df_rutas["Tiempo_Entrega"] / (df_rutas["NPS_Numerico"] + 0.1)
 
-    fig_heat = px.density_heatmap(
-        df_rutas, 
-        x="Ciudad_Destino", 
-        y="Bodega_Origen", 
-        z="score_crisis",
-        color_continuous_scale="Reds",
-        title="Intensidad de Crisis por Ruta",
-        labels={"score_crisis": "Índice de Crisis"}
-    )
-    st.plotly_chart(fig_heat, use_container_width=True)
+        df_rutas = df_rutas.sort_values("Ciudad_Destino")
 
-    # 4. Análisis de Correlación por Ciudad (EL GRÁFICO QUE APARECÍA VACÍO)
+        fig_heat = px.density_heatmap(
+            df_rutas, 
+            x="Ciudad_Destino", 
+            y="Bodega_Origen", 
+            z="score_crisis",
+            color_continuous_scale="Reds",
+            title="Intensidad de Crisis por Ruta Geográfica (Incluye NPS 5.0)",
+            labels={"score_crisis": "Índice de Crisis"}
+        )
+        
+        fig_heat.update_xaxes(type='category')
+        st.plotly_chart(fig_heat, use_container_width=True)
+    else:
+        st.warning("No hay suficientes datos geográficos limpios para generar el mapa.")
+
+    # ---------------------------------------------------------
+    # 4. Análisis de Correlación por Ciudad
+    # ---------------------------------------------------------
     st.subheader("📉 Correlación Específica por Ciudad")
     
     correlaciones_ciudad = []
-    # Reducimos el requisito a > 2 registros para ver más datos en el gráfico
-    for ciudad in df_analisis["Ciudad_Destino"].unique():
-        df_c = df_analisis[df_analisis["Ciudad_Destino"] == ciudad]
+    ciudades_validas = df_geo["Ciudad_Destino"].unique()
+    
+    for ciudad in ciudades_validas:
+        df_c = df_geo[df_geo["Ciudad_Destino"] == ciudad]
         if len(df_c) >= 2: 
             corr = df_c["Tiempo_Entrega"].corr(df_c["NPS_Numerico"])
             if not np.isnan(corr):
@@ -84,25 +100,23 @@ def mostrar_crisis_logistica(df_filtrado):
     
     if correlaciones_ciudad:
         df_corr_city = pd.DataFrame(correlaciones_ciudad).sort_values("Correlacion")
-
         fig_corr = px.bar(
             df_corr_city, 
-            x="Correlacion", 
-            y="Ciudad", 
+            x="Correlacion", y="Ciudad", 
             orientation='h',
             color="Correlacion",
             color_continuous_scale="RdYlGn_r",
-            title="Ciudades donde el Tiempo afecta el NPS"
+            title="Impacto del Tiempo en el NPS por Ciudad"
         )
         st.plotly_chart(fig_corr, use_container_width=True)
-    else:
-        st.warning("⚠️ No hay suficiente variación en los datos de NPS para calcular correlaciones por ciudad. Se requiere mayor diversidad en las encuestas de satisfacción reales.")
 
+    # ---------------------------------------------------------
     # 5. Recomendación Ejecutiva
-    st.subheader("🚨 Recomendación de Intervención")
+    # ---------------------------------------------------------
     if not df_rutas.empty:
         ruta_peor = df_rutas.sort_values("score_crisis", ascending=False).iloc[0]
+        st.subheader("🚨 Recomendación de Intervención")
         with st.expander("📝 Dictamen del Consultor Logístico"):
             st.error(f"Priorizar auditoría en ruta: **{ruta_peor['Bodega_Origen']} ➔ {ruta_peor['Ciudad_Destino']}**.")
             st.write(f"- **Tiempo prom.:** {ruta_peor['Tiempo_Entrega']:.1f} días.")
-            st.info("Nota: La correlación indica qué tan sensibles son los clientes al tiempo en esta zona.")
+            st.write(f"- **NPS Promedio:** {ruta_peor['NPS_Numerico']:.2f}")
